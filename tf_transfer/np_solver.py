@@ -32,13 +32,18 @@ def calc(F):
     ### 4. Propagate to the neighbours
     for i, cx, cy in zip(VECTOR_INDEXES, VECTORS_VELOCITIES_X, VECTORS_VELOCITIES_Y):
         F[:, :, i] = np.roll(F[:, :, i], (cx, cy), axis=(1, 0))
-    # for vis
-    vorticity = (
-        (np.roll(ux, -1, axis=0) - np.roll(ux, 1, axis=0)) - 
-        (np.roll(uy, -1, axis=1) - np.roll(uy, 1, axis=1))
-    )
+    return F
+
+
+def pre_plot(F):
     rho = np.sum(F, 2)
     ux  = np.sum(F * VECTORS_VELOCITIES_X, 2) / rho
     uy  = np.sum(F * VECTORS_VELOCITIES_Y, 2) / rho
     u = np.sqrt(ux ** 2 + uy ** 2)
-    return F
+    
+    vorticity = (
+        (np.roll(ux, -1, axis=0) - np.roll(ux, 1, axis=0)) - 
+        (np.roll(uy, -1, axis=1) - np.roll(uy, 1, axis=1))
+    )
+    return u, vorticity
+    

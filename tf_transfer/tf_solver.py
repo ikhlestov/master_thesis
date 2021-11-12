@@ -1,4 +1,7 @@
-from constants import *
+try:
+    from .constants import *
+except ImportError:
+    from constants import *
 
 import tensorflow as tf
 
@@ -88,12 +91,44 @@ def boundary_init(shape, dtype=None, partition_info=None):
 boundary_conv = tf.keras.layers.Conv2D(9, (1, 1), kernel_initializer=boundary_init)
 dtype = tf.float32
 
+
+def build_roll_kernel(element_idx, cx, cy):
+    cx_pattern = [0, 1, 2]
+    cx_moves = np.roll(cx_pattern, -cx)
+    cy_pattern = [0, 1, 2]
+    cy_moves = np.roll(cy_pattern, -cy)
+    kernels = []
+    for cy_move in cy_moves:
+        kerlens_line = []
+        for cx_move in cx_moves:
+            kernel = np.zeros((9, 9))
+            inner_idx = cy_move * 3 + cx_move
+            kernel[element_idx][inner_idx] = 1.0
+            kerlens_line.append(kernel)
+        kernels.append(kerlens_line)
+    return np.array(kernels)
+
+
+def roll_init(shape, dtype=None, partition_info=None):
+    return tf.cast(tf.constant(KERNEL), dtype)
+
+roll_kernels = [build_roll_kernel(i, cx, cy) for i, cx, cy in
+                zip(VECTOR_INDEXES, VECTORS_VELOCITIES_X, VECTORS_VELOCITIES_Y)]
+
+roll_convs = []
+for i in VECTOR_INDEXES:
+    KERNEL = roll_kernels[i]
+    roll_convs.append(tf.keras.layers.Conv2D(
+        9, (3, 3), kernel_initializer=roll_init,
+        padding='same', strides=1)
+    )
+
 F = init_poiseuille()
 bndryF = tf.Variable(F)
 F_var = tf.Variable(F)
 # To insert by indexes - https://www.tensorflow.org/api_docs/python/tf/scatter_nd
 # Extract complex indexes - https://www.tensorflow.org/api_docs/python/tf/gather_nd
-def calc_inner(F, F_res):
+def calc_inner(F, F_res, wide_F_tf):
     # Set reflective boundaries
     # shape: (3405, 9)
     # F_r = tf.expand_dims(F, axis=0)
@@ -118,9 +153,9 @@ def calc_inner(F, F_res):
     )
     
     ### 1. Compute moments (for each latice)
-    rho = tf.math.reduce_sum(F, axis=2)
-    ux  = tf.math.reduce_sum(F * VECTORS_VELOCITIES_X, 2) / rho   # shape: (100, 400)
-    uy  = tf.math.reduce_sum(F * VECTORS_VELOCITIES_Y, 2) / rho   # shape: (100, 400)
+    # rho = tf.math.reduce_sum(F, axis=2)
+    # ux  = tf.math.reduce_sum(F * VECTORS_VELOCITIES_X, 2) / rho   # shape: (100, 400)
+    # uy  = tf.math.reduce_sum(F * VECTORS_VELOCITIES_Y, 2) / rho   # shape: (100, 400)
     F_eq = tf.cast(
         tf.squeeze(calc_tf_eq_core(tf.expand_dims(F, axis=0))),
         dtype
@@ -135,28 +170,57 @@ def calc_inner(F, F_res):
         ), 9, axis=2
     )
     F = F * tf.cast(1 - cyl_mask, dtype) + bndryF * tf.cast(cyl_mask, dtype)
-    for i, cx, cy in zip(VECTOR_INDEXES, VECTORS_VELOCITIES_X, VECTORS_VELOCITIES_Y):
-        F_res[:, :, i].assign(tf.roll(F[:, :, i], (cx, cy), axis=(1, 0)))
+    # for i, cx, cy in zip(VECTOR_INDEXES, VECTORS_VELOCITIES_X, VECTORS_VELOCITIES_Y):
+    #     F_res[:, :, i].assign(tf.roll(F[:, :, i], (cx, cy), axis=(1, 0)))
+
+    wide_F_tf[1:-1, 1:-1, :].assign(F)
+    wide_F_tf[0, 1:-1, :].assign(F[-1, :, :])
+    wide_F_tf[-1, 1:-1, :].assign(F[0, :, :])
+    wide_F_tf[1:-1, 0, :].assign(F[:, -1, :])
+    wide_F_tf[1:-1, -1, :].assign(F[:, 0, :])
+    wide_F_tf[0, 0, :].assign(F[-1, -1, :])
+    wide_F_tf[-1, -1, :].assign(F[0, 0, :])
+    wide_F_tf[0, -1, :].assign(F[-1, 0, :])
+    wide_F_tf[-1, 0, :].assign(F[0, -1, :])
+    wide_F_tf_batch = tf.expand_dims(wide_F_tf, axis=0)
+    for idx in VECTOR_INDEXES:
+        F_res[:, :, idx].assign(
+            tf.cast(
+                tf.squeeze(roll_convs[idx](wide_F_tf_batch))[1:-1, 1:-1, :],
+                dtype
+            )
+        )
     F = F_res
-    # for vis
-    vorticity = (
-        (tf.roll(ux, -1, axis=0) - tf.roll(ux, 1, axis=0)) - 
-        (tf.roll(uy, -1, axis=1) - tf.roll(uy, 1, axis=1))
-    )
-    rho = tf.math.reduce_sum(F, 2)
-    ux  = tf.math.reduce_sum(F * VECTORS_VELOCITIES_X, 2) / rho
-    uy  = tf.math.reduce_sum(F * VECTORS_VELOCITIES_Y, 2) / rho
-    u = tf.sqrt(ux ** 2 + uy ** 2)
     return F
 
-tf_func = tf.function(calc_inner)
+wide_F = np.zeros((F.shape[0] + 2, F.shape[1] + 2, 9))
+tf_step = tf.function(calc_inner)
 
 @tf_to_numpy
 def calc(F):
     # return calc_inner(F)
     F_res = tf.Variable(F, dtype=dtype)
-    return tf_func(F, F_res)
+    wide_F_tf = tf.Variable(wide_F, dtype=dtype)
+    return tf_step(F, F_res, wide_F_tf)
+
+
+def pre_plot_inner(F):
+    rho = tf.math.reduce_sum(F, axis=2)
+    ux  = tf.math.reduce_sum(F * VECTORS_VELOCITIES_X, 2) / rho   # shape: (100, 400)
+    uy  = tf.math.reduce_sum(F * VECTORS_VELOCITIES_Y, 2) / rho   # shape: (100, 400)
+    u = tf.sqrt(ux ** 2 + uy ** 2)
+
+    vorticity = (
+        (tf.roll(ux, -1, axis=0) - tf.roll(ux, 1, axis=0)) - 
+        (tf.roll(uy, -1, axis=1) - tf.roll(uy, 1, axis=1))
+    )
+    return u, vorticity
+
+pre_plot_tf_func = tf.function(pre_plot_inner)
 
 
 
-
+@tf_to_numpy
+def pre_plot(F):
+    F_tf = tf.Variable(F, dtype=dtype)
+    return pre_plot_tf_func(F_tf)

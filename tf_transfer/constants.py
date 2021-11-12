@@ -149,15 +149,15 @@ def init_poiseuille():
     rho = 1
     y, x = np.meshgrid(np.arange(LENGTH_Y), np.arange(LENGTH_X))
     F = np.empty((LENGTH_X, LENGTH_Y, N_VECTORS))
-    y_phys = y - 0.5;
+    y_phys = y - 0.5
     ux = poiseuille_profile(y_phys)
     uy = np.zeros((LENGTH_X, LENGTH_Y))
     
     for idx in range(9):
         # 300, 100
-        cu = 3 * (VECTORS_VELOCITIES_X[idx] * ux + VECTORS_VELOCITIES_Y[idx] * uy);
+        cu = 3 * (VECTORS_VELOCITIES_X[idx] * ux + VECTORS_VELOCITIES_Y[idx] * uy)
         # 300, 100
-        res = rho * VECTORS_WEIGHTS[idx] * (1 + cu + 1/2 * cu ** 2 - 3/2*(ux**2 + uy **2));
+        res = rho * VECTORS_WEIGHTS[idx] * (1 + cu + 1/2 * cu ** 2 - 3/2*(ux**2 + uy **2))
         F[:, :, idx] = res
     F = np.rot90(F)
     return F
