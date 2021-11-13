@@ -91,35 +91,28 @@ def boundary_init(shape, dtype=None, partition_info=None):
 boundary_conv = tf.keras.layers.Conv2D(9, (1, 1), kernel_initializer=boundary_init)
 dtype = tf.float32
 
+lattice_idx_to_kernel = [
+    (0, 2), (0, 1), (0, 0),
+    (1, 2), (1, 1), (1, 0),
+    (2, 2), (2, 1), (2, 0)
+]
+roll_kernels = []
+for vector_idx, lattice_idx in zip(VECTOR_INDEXES, lattice_idx_to_kernel):
+    kernels = np.zeros((3, 3, 9, 1))
+    kernels[lattice_idx[0], lattice_idx[1], vector_idx] = 1
+    roll_kernels.append(kernels)
 
-def build_roll_kernel(element_idx, cx, cy):
-    cx_pattern = [0, 1, 2]
-    cx_moves = np.roll(cx_pattern, -cx)
-    cy_pattern = [0, 1, 2]
-    cy_moves = np.roll(cy_pattern, -cy)
-    kernels = []
-    for cy_move in cy_moves:
-        kerlens_line = []
-        for cx_move in cx_moves:
-            kernel = np.zeros((9, 9))
-            inner_idx = cy_move * 3 + cx_move
-            kernel[element_idx][inner_idx] = 1.0
-            kerlens_line.append(kernel)
-        kernels.append(kerlens_line)
-    return np.array(kernels)
-
-
-def roll_init(shape, dtype=None, partition_info=None):
-    return tf.cast(tf.constant(KERNEL), dtype)
-
-roll_kernels = [build_roll_kernel(i, cx, cy) for i, cx, cy in
-                zip(VECTOR_INDEXES, VECTORS_VELOCITIES_X, VECTORS_VELOCITIES_Y)]
+def get_roll_init(kernel):
+    kernel_local = kernel
+    def roll_init(shape, dtype=None, partition_info=None):
+        return tf.cast(tf.constant(kernel_local), dtype)
+    return roll_init
 
 roll_convs = []
-for i in VECTOR_INDEXES:
-    KERNEL = roll_kernels[i]
+for idx in range(9):
+    KERNEL = roll_kernels[idx]
     roll_convs.append(tf.keras.layers.Conv2D(
-        9, (3, 3), kernel_initializer=roll_init,
+        1, (3, 3), kernel_initializer=get_roll_init(KERNEL),
         padding='same', strides=1)
     )
 
@@ -170,9 +163,10 @@ def calc_inner(F, F_res, wide_F_tf):
         ), 9, axis=2
     )
     F = F * tf.cast(1 - cyl_mask, dtype) + bndryF * tf.cast(cyl_mask, dtype)
-    # for i, cx, cy in zip(VECTOR_INDEXES, VECTORS_VELOCITIES_X, VECTORS_VELOCITIES_Y):
-    #     F_res[:, :, i].assign(tf.roll(F[:, :, i], (cx, cy), axis=(1, 0)))
 
+    # TODO: we can work with wide F, and only slice in some places where it required
+    # TODO: drop uneccessary casting
+    # wide_F_tf = tf.constant(0, shape=(100 + 2, 400 + 2, 9))
     wide_F_tf[1:-1, 1:-1, :].assign(F)
     wide_F_tf[0, 1:-1, :].assign(F[-1, :, :])
     wide_F_tf[-1, 1:-1, :].assign(F[0, :, :])
@@ -184,12 +178,11 @@ def calc_inner(F, F_res, wide_F_tf):
     wide_F_tf[-1, 0, :].assign(F[0, -1, :])
     wide_F_tf_batch = tf.expand_dims(wide_F_tf, axis=0)
     for idx in VECTOR_INDEXES:
-        F_res[:, :, idx].assign(
-            tf.cast(
-                tf.squeeze(roll_convs[idx](wide_F_tf_batch))[1:-1, 1:-1, :],
+        res_1 = tf.cast(
+                tf.squeeze(roll_convs[idx](wide_F_tf_batch))[1:-1, 1:-1],
                 dtype
             )
-        )
+        F_res[:, :, idx].assign(res_1)
     F = F_res
     return F
 
@@ -200,7 +193,9 @@ tf_step = tf.function(calc_inner)
 def calc(F):
     # return calc_inner(F)
     F_res = tf.Variable(F, dtype=dtype)
+    # wide_F_tf = np.zeros((102, 402, 9))
     wide_F_tf = tf.Variable(wide_F, dtype=dtype)
+    # return calc_inner(F, F_res, wide_F_tf)
     return tf_step(F, F_res, wide_F_tf)
 
 
@@ -210,14 +205,13 @@ def pre_plot_inner(F):
     uy  = tf.math.reduce_sum(F * VECTORS_VELOCITIES_Y, 2) / rho   # shape: (100, 400)
     u = tf.sqrt(ux ** 2 + uy ** 2)
 
-    vorticity = (
-        (tf.roll(ux, -1, axis=0) - tf.roll(ux, 1, axis=0)) - 
-        (tf.roll(uy, -1, axis=1) - tf.roll(uy, 1, axis=1))
-    )
-    return u, vorticity
+    # vorticity = (
+    #     (tf.roll(ux, -1, axis=0) - tf.roll(ux, 1, axis=0)) - 
+    #     (tf.roll(uy, -1, axis=1) - tf.roll(uy, 1, axis=1))
+    # )
+    return u
 
 pre_plot_tf_func = tf.function(pre_plot_inner)
-
 
 
 @tf_to_numpy
