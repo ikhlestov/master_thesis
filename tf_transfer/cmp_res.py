@@ -21,9 +21,11 @@ def main():
     for step in range(5):
         print(f"step: {step}")
         np_res = np_calc(F_np)
+        F_np = np_res
         np_to_plot = np_pre_plot(np_res)
         start = performance(start)
         tf_res = tf_calc(F_tf)
+        F_tf = tf_res
         tf_to_plot = tf_pre_plot(tf_res)
         start = performance(start)
     

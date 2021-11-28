@@ -121,7 +121,7 @@ bndryF = tf.Variable(F)
 F_var = tf.Variable(F)
 # To insert by indexes - https://www.tensorflow.org/api_docs/python/tf/scatter_nd
 # Extract complex indexes - https://www.tensorflow.org/api_docs/python/tf/gather_nd
-def calc_inner(F, F_res, wide_F_tf):
+def calc_inner(F, F_res, wide_F_tf, cyl_mask_np, tau):
     # Set reflective boundaries
     # shape: (3405, 9)
     # F_r = tf.expand_dims(F, axis=0)
@@ -155,17 +155,19 @@ def calc_inner(F, F_res, wide_F_tf):
     )
     F = tf.cast(F, dtype)
     bndryF = tf.cast(bndryF, dtype)
-    F = F - (F - F_eq) / TAU
+    # F = F - (F - F_eq) / TAU
+    omega = 1 / tau
+    F = (1 - omega) * F + omega * F_eq
     cyl_mask = tf.repeat(
         tf.expand_dims(
-            tf.constant(CYLINDER_MASK, dtype=np.uint8),
+            # tf.constant(cyl_mask_np, dtype=np.uint8),
+            cyl_mask_np,
             -1
         ), 9, axis=2
     )
     F = F * tf.cast(1 - cyl_mask, dtype) + bndryF * tf.cast(cyl_mask, dtype)
 
     # TODO: we can work with wide F, and only slice in some places where it required
-    # TODO: drop uneccessary casting
     # wide_F_tf = tf.constant(0, shape=(100 + 2, 400 + 2, 9))
     wide_F_tf[1:-1, 1:-1, :].assign(F)
     wide_F_tf[0, 1:-1, :].assign(F[-1, :, :])
@@ -190,13 +192,15 @@ wide_F = np.zeros((F.shape[0] + 2, F.shape[1] + 2, 9))
 tf_step = tf.function(calc_inner)
 
 @tf_to_numpy
-def calc(F):
+def calc(F, wide_F=None, cyl_mask_np=None, tau=None):
     # return calc_inner(F)
+    if wide_F is None:
+        wide_F = np.zeros((F.shape[0] + 2, F.shape[1] + 2, 9))
+        cyl_mask_np = CYLINDER_MASK.astype(np.uint8)
+        tau = TAU
     F_res = tf.Variable(F, dtype=dtype)
-    # wide_F_tf = np.zeros((102, 402, 9))
     wide_F_tf = tf.Variable(wide_F, dtype=dtype)
-    # return calc_inner(F, F_res, wide_F_tf)
-    return tf_step(F, F_res, wide_F_tf)
+    return tf_step(F, F_res, wide_F_tf, tf.constant(cyl_mask_np), tau)
 
 
 def pre_plot_inner(F):
@@ -205,11 +209,11 @@ def pre_plot_inner(F):
     uy  = tf.math.reduce_sum(F * VECTORS_VELOCITIES_Y, 2) / rho   # shape: (100, 400)
     u = tf.sqrt(ux ** 2 + uy ** 2)
 
-    # vorticity = (
-    #     (tf.roll(ux, -1, axis=0) - tf.roll(ux, 1, axis=0)) - 
-    #     (tf.roll(uy, -1, axis=1) - tf.roll(uy, 1, axis=1))
-    # )
-    return u
+    vorticity = (
+        (tf.roll(ux, -1, axis=0) - tf.roll(ux, 1, axis=0)) - 
+        (tf.roll(uy, -1, axis=1) - tf.roll(uy, 1, axis=1))
+    )
+    return u, vorticity, rho
 
 pre_plot_tf_func = tf.function(pre_plot_inner)
 
