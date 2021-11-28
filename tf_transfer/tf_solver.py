@@ -181,6 +181,11 @@ def pre_plot_inner(F, ux_l_var, uy_l_var):
     uy  = tf.math.reduce_sum(F * VECTORS_VELOCITIES_Y, 2) / rho   # shape: (100, 400)
     u = tf.sqrt(ux ** 2 + uy ** 2)
 
+    # vorticity = (
+    #     (tf.roll(ux, -1, axis=0) - tf.roll(ux, 1, axis=0)) - 
+    #     (tf.roll(uy, -1, axis=1) - tf.roll(uy, 1, axis=1))
+    # )
+
     ux_l_var = copy_small_arr_to_large(ux, ux_l_var)
     uy_l_var = copy_small_arr_to_large(uy, uy_l_var)
  

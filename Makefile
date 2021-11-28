@@ -19,6 +19,12 @@ upload_all:
 	    . illarion@213.32.26.74:~/Projects/master_degree
 
 download_frames:
+	rsync -avh illarion@213.32.26.74:~/Projects/master_degree/frames/ frames
+
+download_videos:
+	rsync -avh illarion@213.32.26.74:~/Projects/master_degree/videos/ videos
+
+download_code:
 	rsync -avh \
 	    --include=.dockerignore \
 	    --exclude=".*" \
@@ -29,9 +35,11 @@ download_frames:
 	    --exclude=__pycache__ \
 	    --exclude=logs \
 	    --exclude=htmlcov \
+	    --exclude=frames \
+	    --exclude=videos \
 	    --exclude=*.sublime-project \
 	    --exclude=*.sublime-workspace \
-	    illarion@213.32.26.74:~/Projects/master_degree/frames/ frames
+	    illarion@213.32.26.74:~/Projects/master_degree/ .
 
 download_all:
 	rsync -avh \
