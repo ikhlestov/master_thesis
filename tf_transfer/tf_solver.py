@@ -72,6 +72,7 @@ def calc_tf_eq_core(data_flat):
     F_eq = tf.math.multiply(rho, after_weights)
     return F_eq
 
+
 def boundary_init(shape, dtype=None, partition_info=None):
     kernel = np.zeros(shape)
     kernel[0, 0, :, :] = tf.constant(np.array([
@@ -90,31 +91,6 @@ def boundary_init(shape, dtype=None, partition_info=None):
 
 boundary_conv = tf.keras.layers.Conv2D(9, (1, 1), kernel_initializer=boundary_init)
 dtype = tf.float32
-
-lattice_idx_to_kernel = [
-    (0, 2), (0, 1), (0, 0),
-    (1, 2), (1, 1), (1, 0),
-    (2, 2), (2, 1), (2, 0)
-]
-roll_kernels = []
-for vector_idx, lattice_idx in zip(VECTOR_INDEXES, lattice_idx_to_kernel):
-    kernels = np.zeros((3, 3, 9, 1))
-    kernels[lattice_idx[0], lattice_idx[1], vector_idx] = 1
-    roll_kernels.append(kernels)
-
-def get_roll_init(kernel):
-    kernel_local = kernel
-    def roll_init(shape, dtype=None, partition_info=None):
-        return tf.cast(tf.constant(kernel_local), dtype)
-    return roll_init
-
-roll_convs = []
-for idx in range(9):
-    KERNEL = roll_kernels[idx]
-    roll_convs.append(tf.keras.layers.Conv2D(
-        1, (3, 3), kernel_initializer=get_roll_init(KERNEL),
-        padding='same', strides=1)
-    )
 
 F = init_poiseuille()
 bndryF = tf.Variable(F)
@@ -178,13 +154,9 @@ def calc_inner(F, F_res, wide_F_tf, cyl_mask_np, tau):
     wide_F_tf[-1, -1, :].assign(F[0, 0, :])
     wide_F_tf[0, -1, :].assign(F[-1, 0, :])
     wide_F_tf[-1, 0, :].assign(F[0, -1, :])
-    wide_F_tf_batch = tf.expand_dims(wide_F_tf, axis=0)
-    for idx in VECTOR_INDEXES:
-        res_1 = tf.cast(
-                tf.squeeze(roll_convs[idx](wide_F_tf_batch))[1:-1, 1:-1],
-                dtype
-            )
-        F_res[:, :, idx].assign(res_1)
+    for i, cx, cy in zip(VECTOR_INDEXES, VECTORS_VELOCITIES_X, VECTORS_VELOCITIES_Y):
+        F_res[:, :, i].assign(wide_F_tf[:, :, i][1-cy:F.shape[0] + 1 - cy, 1-cx:F.shape[1] + 1 - cx])
+
     F = F_res
     return F
 
@@ -203,22 +175,51 @@ def calc(F, wide_F=None, cyl_mask_np=None, tau=None):
     return tf_step(F, F_res, wide_F_tf, tf.constant(cyl_mask_np), tau)
 
 
-def pre_plot_inner(F):
+def pre_plot_inner(F, ux_l_var, uy_l_var):
     rho = tf.math.reduce_sum(F, axis=2)
     ux  = tf.math.reduce_sum(F * VECTORS_VELOCITIES_X, 2) / rho   # shape: (100, 400)
     uy  = tf.math.reduce_sum(F * VECTORS_VELOCITIES_Y, 2) / rho   # shape: (100, 400)
     u = tf.sqrt(ux ** 2 + uy ** 2)
 
+    ux_l_var = copy_small_arr_to_large(ux, ux_l_var)
+    uy_l_var = copy_small_arr_to_large(uy, uy_l_var)
+ 
     vorticity = (
-        (tf.roll(ux, -1, axis=0) - tf.roll(ux, 1, axis=0)) - 
-        (tf.roll(uy, -1, axis=1) - tf.roll(uy, 1, axis=1))
+        (ux_l_var[2:, 1:-1] - ux_l_var[0:-2, 1:-1]) -
+        (uy_l_var[1:-1, 2:] - uy_l_var[1:-1, 0:-2])
     )
+
     return u, vorticity, rho
 
 pre_plot_tf_func = tf.function(pre_plot_inner)
 
 
+def copy_small_arr_to_large(arr, arr_large):
+    arr_large[1:-1, 1:-1].assign(arr)
+    arr_large[0, 1:-1].assign(arr[-1, :])
+    arr_large[-1, 1:-1].assign(arr[0, :])
+    arr_large[1:-1, 0].assign(arr[:, -1])
+    arr_large[1:-1, -1].assign(arr[:, 0])
+    arr_large[0, 0].assign(arr[-1, -1])
+    arr_large[-1, -1].assign(arr[0, 0])
+    arr_large[0, -1].assign(arr[-1, 0])
+    arr_large[-1, 0].assign(arr[0, -1])
+    return arr_large
+
+
+def enlarge_array(arr):
+    """Create enlarged array with shape height x width"""
+    arr_large = np.zeros((arr.shape[0] + 2, arr.shape[1] + 2))
+    arr_large = copy_small_arr_to_large(arr, arr_large)
+    return arr_large
+
+
 @tf_to_numpy
-def pre_plot(F):
+def pre_plot(F, ux_l=None, uy_l=None):
+    if ux_l is None:
+        ux_l = np.zeros((F.shape[0] + 2, F.shape[1] + 2))
+        uy_l = np.zeros((F.shape[0] + 2, F.shape[1] + 2))
     F_tf = tf.Variable(F, dtype=dtype)
-    return pre_plot_tf_func(F_tf)
+    ux_l_var = tf.Variable(ux_l, dtype=dtype)
+    uy_l_var = tf.Variable(uy_l, dtype=dtype)
+    return pre_plot_tf_func(F_tf, ux_l_var, uy_l_var)

@@ -56,8 +56,21 @@ def calc(F, cylinder_mask=None, tau=None, u_max=None, pipe_length=None):
     F[cylinder_mask, :] = bndryF
 
     ### 4. Propagate to the neighbours
+    # for i, cx, cy in zip(VECTOR_INDEXES, VECTORS_VELOCITIES_X, VECTORS_VELOCITIES_Y):
+    #     F[:, :, i] = np.roll(F[:, :, i], (cx, cy), axis=(1, 0))
+    wide_F = np.zeros((F.shape[0] + 2, F.shape[1] + 2, 9))
+    wide_F[1:-1, 1:-1, :] = (F)
+    wide_F[0, 1:-1, :] = (F[-1, :, :])
+    wide_F[-1, 1:-1, :] = (F[0, :, :])
+    wide_F[1:-1, 0, :] = (F[:, -1, :])
+    wide_F[1:-1, -1, :] = (F[:, 0, :])
+    wide_F[0, 0, :] = (F[-1, -1, :])
+    wide_F[-1, -1, :] = (F[0, 0, :])
+    wide_F[0, -1, :] = (F[-1, 0, :])
+    wide_F[-1, 0, :] = (F[0, -1, :])
     for i, cx, cy in zip(VECTOR_INDEXES, VECTORS_VELOCITIES_X, VECTORS_VELOCITIES_Y):
-        F[:, :, i] = np.roll(F[:, :, i], (cx, cy), axis=(1, 0))
+        F[:, :, i] = wide_F[:, :, i][1-cy:F.shape[0] + 1 - cy, 1-cx:F.shape[1] + 1 - cx]
+
     return F
 
 
