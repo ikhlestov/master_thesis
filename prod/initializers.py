@@ -7,7 +7,6 @@ from const import (
     VECTORS_WEIGHTS,
     N_VECTORS,
     U_MAX,
-    RHO_0,
 )
 
 
@@ -34,16 +33,14 @@ def init_poiseuille(length_x: int, length_y: int, u_max: int=U_MAX):
     return F
 
 
-def calc_init_params(scale: int, Re, D: float, u_max: float=U_MAX, rho_0: int=RHO_0):
+def calc_init_params(scale: int, Re, D: float, u_max: float=U_MAX):
     """
     Args:
         Re: Reynolds number
         D: normalized object size, in (0..1)
     """
     Re_calc = Re / scale
-    # D = NORM_CYLINDER_DIAMETER
     u = u_max
-    rho = rho_0
     nu = u * D / Re_calc   # Kinematic viscosity
     tau = 3 * nu + 1/2  # Get relaxation parameters
     omega = 1 / tau

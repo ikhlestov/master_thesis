@@ -8,7 +8,6 @@ base_dir = '/Users/IllarionK/Projects/master_degree'
 if not os.path.exists(base_dir):
     base_dir = '/src'
 frames_dir = os.path.join(base_dir, 'frames')
-os.makedirs(frames_dir, exist_ok=True)
 video_dir = os.path.join(base_dir, 'videos')
 os.makedirs(video_dir, exist_ok=True)
 

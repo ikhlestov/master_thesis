@@ -12,13 +12,12 @@ from const import (
     dtype
 )
 from variables import (
-    LENGTH_X,
-    LENGTH_Y,
     OBJECT_MASK
 )
 from helpers import tf_to_numpy
 
 
+# TODO: move this to a separate method that takes mask as an input
 CYL_MASKED_SHAPE = np.sum(OBJECT_MASK)
 indexes = []
 for idx in range(CYL_MASKED_SHAPE * 9):
@@ -93,10 +92,6 @@ def boundary_init(shape, dtype=None, partition_info=None):
 
 boundary_conv = tf.keras.layers.Conv2D(9, (1, 1), kernel_initializer=boundary_init)
 
-
-# F = init_poiseuille(length_x=LENGTH_X, length_y=LENGTH_Y)
-# bndryF = tf.Variable(F)
-# F_var = tf.Variable(F)
 
 @tf.function
 def tf_step(F, F_var, wide_F_var, cyl_mask_np, tau):
