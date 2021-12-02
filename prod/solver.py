@@ -8,21 +8,12 @@ from const import (
     VECTORS_WEIGHTS,
     VECTOR_INDEXES,
     OBJ_BOUNCE_BACK_DIRECTIONS,
-    N_VECTORS,
     dtype
 )
 from variables import (
     OBJECT_MASK
 )
 from helpers import tf_to_numpy
-
-
-# TODO: move this to a separate method that takes mask as an input
-CYL_MASKED_SHAPE = np.sum(OBJECT_MASK)
-indexes = []
-for idx in range(CYL_MASKED_SHAPE * 9):
-    init_idx = OBJ_BOUNCE_BACK_DIRECTIONS[idx % 9]
-    indexes.append(init_idx + (idx // 9) * 9)
 
 
 def build_graph():
