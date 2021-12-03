@@ -20,6 +20,7 @@ upload_all:
 
 download_frames:
 	rsync -avh illarion@213.32.26.74:~/Projects/master_degree/frames/ frames
+	rsync -avh illarion@213.32.26.74:~/Projects/master_degree/frames_CYLINDER/ frames_CYLINDER
 
 download_videos:
 	rsync -avh illarion@213.32.26.74:~/Projects/master_degree/videos/ videos
