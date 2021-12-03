@@ -45,3 +45,32 @@ def calc_init_params(scale: int, Re, D: float, u_max: float=U_MAX):
     tau = 3 * nu + 1/2  # Get relaxation parameters
     omega = 1 / tau
     return nu, tau, omega
+
+
+# Shapes masks initializers
+def get_square(obj_d, x_mesh, y_mesh, obj_center_x, obj_center_y, scale, y_shift):
+    """x_mes, y_mesh = np.meshgrid(range(LENGTH_X), range(LENGTH_Y))"""
+    norm_square_edge = obj_d
+    square_edge = int(norm_square_edge * scale)
+    object_mask = np.logical_and(
+        abs(x_mesh - obj_center_x) - square_edge < 0,
+        abs(y_mesh - obj_center_y + y_shift) - square_edge < 0
+    )
+    return object_mask
+
+
+def get_cylinder(obj_d, x_mesh, y_mesh, obj_center_x, obj_center_y, scale, y_shift):
+    norm_cylinder_radius = obj_d / 2
+    cylinder_radius = int(norm_cylinder_radius * scale)
+    # True within object boundaries
+    object_mask = (x_mesh - obj_center_x) ** 2 + (y_mesh - obj_center_y + y_shift) ** 2 < (cylinder_radius) ** 2
+    return object_mask
+
+
+def get_plate(obj_d, x_mesh, y_mesh, obj_center_x, obj_center_y, scale, y_shift):
+    plate_size = int(obj_d * scale)
+    object_mask = np.logical_and(
+            abs(x_mesh - obj_center_x) == 0,
+            abs(y_mesh - obj_center_y + y_shift) - plate_size < 0
+        )
+    return object_mask

@@ -7,11 +7,7 @@ from const import (
     VECTORS_VELOCITIES_Y,
     VECTORS_WEIGHTS,
     VECTOR_INDEXES,
-    OBJ_BOUNCE_BACK_DIRECTIONS,
     dtype
-)
-from variables import (
-    OBJECT_MASK
 )
 from helpers import tf_to_numpy
 
