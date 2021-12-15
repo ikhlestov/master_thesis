@@ -1,6 +1,10 @@
 # Self defined
 logs/*
 data/*
+frames*/*
+videos*/*
+.DS_Store
+animations/*
 
 # IDE
 *.sublime-workspace

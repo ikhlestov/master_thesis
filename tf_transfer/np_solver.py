@@ -85,4 +85,3 @@ def pre_plot(F):
         (np.roll(uy, -1, axis=1) - np.roll(uy, 1, axis=1))
     )
     return u, vorticity
-    
